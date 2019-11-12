@@ -53,6 +53,7 @@ def LocalMain(config) :
     uri_client = GenericServiceClient(server_uri)
     response = None
     wo_id = None
+    wo_id_2 = None
     if input_json_dir:
         directory = os.fsencode(input_json_dir)
         files = os.listdir(directory)
@@ -63,7 +64,7 @@ def LocalMain(config) :
             #----------------------------------------------------------------------------------
 
             #If Client request is WorkOrderSubmit,a requester payload's signature with the requester private signing key is generated.
-            if "WorkOrderSubmit" in input_json_str1 :
+            if "1111" in input_json_str1 and "WorkOrderSubmit" in input_json_str1:
                 # Update workOrderId , workerId and workloadId
                 input_json_obj = json.loads(input_json_str1)
                 wo_id = hex(random.randint(1, 2**64 - 1))
@@ -89,6 +90,33 @@ def LocalMain(config) :
                     exit(1)
                 if input_json_str1 is None:
                     continue
+
+            if "2222" in input_json_str1 and "WorkOrderSubmit" in input_json_str1:
+                # Update workOrderId , workerId and workloadId
+                input_json_obj = json.loads(input_json_str1)
+                wo_id_2 = hex(random.randint(1, 2**64 - 1))
+                input_json_obj["params"]["workOrderId"] = wo_id_2
+                input_json_obj["params"]["workerId"] = worker_obj.worker_id
+                # Convert workloadId to a hex string and update the request
+                workload_id = input_json_obj["params"]["workloadId"]
+                workload_id_hex = workload_id.encode("UTF-8").hex()
+                input_json_obj["params"]["workloadId"] = workload_id_hex
+                input_json_str1 = json.dumps(input_json_obj)
+
+                #Generate session iv an encrypted session key
+                session_iv_2 = enclave_helper.generate_iv()
+                session_key_2 = enclave_helper.generate_key()
+                encrypted_session_key = enclave_helper.generate_encrypted_key(session_key_2,
+                        worker_obj.encryption_key)
+
+                input_json_str1, status = sig_obj.generate_client_signature(input_json_str1,
+                        worker_obj, private_key, session_key_2, session_iv_2,
+                        encrypted_session_key)
+                if status != SignatureStatus.PASSED:
+                    logger.info("Generate signature failed\n")
+                    exit(1)
+                if input_json_str1 is None:
+                    continue					
             #----------------------------------------------------------------------------------
 
             # Update the worker ID
@@ -102,10 +130,17 @@ def LocalMain(config) :
                        input_json_str1 = json.dumps(input_json_final)
                        logger.info("**********Worker details Updated with Worker ID*********\n%s\n", input_json_str1)
             #-----------------------------------------------------------------------------------
-            if "WorkOrderGetResult" in input_json_str1 or "WorkOrderReceiptRetrieve":
+            if "1111" in input_json_str1 and "WorkOrderGetResult" in input_json_str1:
                 input_json_obj = json.loads(input_json_str1)
                 input_json_obj["params"]["workOrderId"] = wo_id
                 input_json_str1 = json.dumps(input_json_obj)
+		
+                #time.sleep(3) 
+
+            if "2222" in input_json_str1 and "WorkOrderGetResult" in input_json_str1:
+                input_json_obj = json.loads(input_json_str1)
+                input_json_obj["params"]["workOrderId"] = wo_id_2
+                input_json_str1 = json.dumps(input_json_obj)				
 
             logger.info("*********Request Json********* \n%s\n", input_json_str1)
             response = uri_client._postmsg(input_json_str1)
@@ -128,7 +163,7 @@ def LocalMain(config) :
             #----------------------------------------------------------------------------------
 
             #Verify the signature
-            if ( "WorkOrderGetResult" in input_json_str1 ):
+            if ( "WorkOrderGetResult" in input_json_str1):
                 if "error" in response:
                     # Response has error, hence skip Signature verification
                     logger.info("Work order response has error, " \
@@ -137,9 +172,13 @@ def LocalMain(config) :
                 sig_bool = sig_obj.verify_signature(response, worker_obj.verification_key)
                 try:
                     if sig_bool > 0:
-                        logger.info("Signature Verified")
-                        enclave_helper.decrypted_response(response,
+                        logger.info("Signature Verified: %s", sig_bool)
+                        if "1111" in input_json_str1:
+                            enclave_helper.decrypted_response(response,
                                    session_key, session_iv)
+                        else:
+                            enclave_helper.decrypted_response(response,
+                                   session_key_2, session_iv_2)
                     else :
                         logger.info("Signature verification Failed")
                         exit(1)
@@ -256,7 +295,7 @@ def Main(args=None):
 
     try :
         config = pconfig.parse_configuration_files(conffiles, confpaths)
-        json.dumps(config, indent=4)
+        config_json_str = json.dumps(config, indent=4)
     except pconfig.ConfigurationException as e :
         logger.error(str(e))
         sys.exit(-1)

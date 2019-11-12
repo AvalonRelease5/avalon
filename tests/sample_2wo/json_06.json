@@ -1,0 +1,8 @@
+{
+    "jsonrpc": "2.0",
+    "method": "WorkOrderGetResult",
+    "id": 2222,
+    "params": {
+        "workOrderId": "0xadb6c73bcc986b"
+    }
+}
